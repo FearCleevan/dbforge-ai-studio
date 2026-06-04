@@ -195,7 +195,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const switchProject = useCallback(async (id: string) => {
     // Try backend first when authenticated
-    if (isAuthenticated() && id !== 'demo-project-ecommerce') {
+    if (isAuthenticated()) {
       try {
         const project = await fetchProject(id)
         const migrated = migrateProject(project)

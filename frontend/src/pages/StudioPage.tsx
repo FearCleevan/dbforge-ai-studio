@@ -1,16 +1,12 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Database } from 'lucide-react'
+import { Database, FolderPlus } from 'lucide-react'
 import { AppShell } from '@/components/layout/AppShell'
 import { useProject } from '@/context/ProjectContext'
 import { useUI } from '@/context/UIContext'
-import { useToast } from '@/context/ToastContext'
 import { localStorageService } from '@/lib/storage/localStorageService'
 import { isAuthenticated } from '@/lib/api/auth'
 import { fetchProject } from '@/lib/api/projects'
-import { ecommerceSchema } from '@/lib/mock/schemas'
-import { DEMO_PROJECT_ID } from '@/lib/constants'
-import { Project } from '@/types'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner'
 
@@ -31,88 +27,31 @@ function PanelFallback() {
 
 export function StudioPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const { currentProject, switchProject, createProject } = useProject()
+  const { currentProject, switchProject } = useProject()
   const { activeTab } = useUI()
-  const { addToast } = useToast()
   const bootstrapped = useRef(false)
 
   useEffect(() => {
+    if (!projectId) return
     if (bootstrapped.current) return
     bootstrapped.current = true
 
-    const resolvedId = projectId ?? DEMO_PROJECT_ID
-
     async function bootstrap() {
-      if (resolvedId === DEMO_PROJECT_ID) {
-        // Logged-in users: check backend first so their saved work is restored
-        if (isAuthenticated()) {
-          try {
-            const project = await fetchProject(resolvedId)
-            localStorageService.saveProject(project)
-            switchProject(resolvedId)
-            return
-          } catch {
-            // Not in backend yet — fall through to create it
-          }
-        } else {
-          // Unauthenticated: use localStorage if available
-          const existing = localStorageService.getProject(resolvedId)
-          if (existing) {
-            switchProject(resolvedId)
-            return
-          }
-        }
-        const now = new Date().toISOString()
-        const demo: Project = {
-          id: DEMO_PROJECT_ID,
-          name: 'E-Commerce Demo',
-          description: 'Auto-created demo project',
-          schema: ecommerceSchema,
-          savedSchemas: [],
-          queries: [],
-          apiRequests: [],
-          environments: [{ id: crypto.randomUUID(), name: 'Development', variables: [] }],
-          namingConvention: { tableCase: 'snake_case', columnCase: 'snake_case' },
-          createdAt: now,
-          updatedAt: now,
-        }
-        await createProject(demo)
-        setTimeout(() => addToast('Welcome! We loaded a demo project to get you started.', 'info'), 300)
-        return
-      }
-
       if (isAuthenticated()) {
         try {
-          const project = await fetchProject(resolvedId)
+          const project = await fetchProject(projectId!)
           localStorageService.saveProject(project)
-          switchProject(resolvedId)
+          switchProject(projectId!)
           return
         } catch {
-          // fall through
+          // fall through to localStorage
         }
       }
 
-      const existing = localStorageService.getProject(resolvedId)
+      const existing = localStorageService.getProject(projectId!)
       if (existing) {
-        switchProject(resolvedId)
-        return
+        switchProject(projectId!)
       }
-
-      const now = new Date().toISOString()
-      const newProject: Project = {
-        id: resolvedId,
-        name: 'New Project',
-        description: '',
-        schema: undefined,
-        savedSchemas: [],
-        queries: [],
-        apiRequests: [],
-        environments: [{ id: crypto.randomUUID(), name: 'Development', variables: [] }],
-        namingConvention: { tableCase: 'snake_case', columnCase: 'snake_case' },
-        createdAt: now,
-        updatedAt: now,
-      }
-      await createProject(newProject)
     }
 
     bootstrap().catch(console.error)
@@ -121,6 +60,15 @@ export function StudioPage() {
   const schema = currentProject?.schema ?? null
 
   const renderPanel = () => {
+    if (!projectId || !currentProject) {
+      return (
+        <EmptyState
+          icon={FolderPlus}
+          title="No project selected"
+          description="Create a new project using the project switcher in the top bar to get started."
+        />
+      )
+    }
     switch (activeTab) {
       case 'schema-designer': return <SchemaDesigner />
       case 'visualizer':      return <SchemaVisualizer schema={schema} />
